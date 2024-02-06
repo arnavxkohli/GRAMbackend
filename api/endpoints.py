@@ -1,8 +1,7 @@
 from flask import render_template, request, jsonify, session
-from firebase_admin import auth
 import pyrebase
 
-from api import app, auth_client, db
+from api import app, auth, db
 
 # main api route; return method and timestamp
 @app.route("/", methods=["GET", "POST", "PUT"])
@@ -18,7 +17,7 @@ def signup():
         email = data.get('email')
         password = data.get('password')
         try:
-            user = auth_client.create_user_with_email_and_password(email, password)
+            user = auth.create_user_with_email_and_password(email, password)
             
         except Exception as e:
             return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
@@ -40,7 +39,7 @@ def signin():
         password = data.get('password')
         try:
             # Sign in the user with email and password using Pyrebase
-            user = auth_client.sign_in_with_email_and_password(email, password)
+            user = auth.sign_in_with_email_and_password(email, password)
             
         except Exception as e:
             return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
@@ -50,6 +49,35 @@ def signin():
                 return jsonify({ "status": "success", "message": "Sign In successful" }), 200
             else:
                 return jsonify({ "status": "failed", "message": "An Error Occurred" }), 200
+            
+@app.route("/bin/init", methods=["GET","POST"])
+def init_bin():
+    if request.method == "POST":
+        data = request.json
+        userId = data.get('uid')
+        binId = data.get('binId')
+        
+        # mm = magnetometer ir = InfraRed us = UltraSonic t = Temperature aq = Air Quality
+        
+        mm = data.get('mm_value')
+        ir = data.get('ir')
+        us = data.get('us')
+        t = data.get('t')
+        aq = data.get('aq')
+        
+        camera_value = "img.jpg" # future works
+        
+        try:
+            data = {"binID": binId, "mm": mm, "ir": ir, "us":us, "t": t, "aq":aq}
+            db.child("Bins").child(userId).set(data)
+            
+        except Exception as e:
+            return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
+        else:
+            return jsonify({ "status": "success", "message": "Bin initialised successfully" }), 200
+            # else:
+            #     return jsonify({ "status": "failed", "message": "An Error Occurred" }), 200
+
 
 
     
