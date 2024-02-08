@@ -1,5 +1,8 @@
 from flask import render_template, request, jsonify, session
 from api import app, auth, db
+from enum import Enum
+
+sensors = Enum('sensors', ['magnetic', 'air_quality', 'temperature', 'infrared', 'ultrasonic'])
 
 
 # main api route; return method and timestamp
@@ -73,45 +76,27 @@ def add_bin():
         return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
 
 
-@app.route("/bin/write", methods=["POST"])
-def write_bin():
-    data = request.json
-    binId = data.get('binId')
-
-    # mm = magnetometer ir = InfraRed us = UltraSonic t = Temperature aq = Air Quality
-
-    mm = data.get('mm_value')
-    ir = data.get('ir')
-    us = data.get('us')
-    t = data.get('t')
-    aq = data.get('aq')
-
-    camera_value = "img.jpg" # future works
-
-    try:
-        data = {"mm": mm, "ir": ir, "us":us, "t": t, "aq":aq}
-        db.child("Bins").child(binId).set(data)
-        return jsonify({ "status": "success", "message": "Bin initialised successfully" }), 200
-    except Exception as e:
-        return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
-
-
 @app.route("/bin/fetch", methods=["GET"])
 def fetch_sensors():
-    data = request.json
-    if 'uId' not in data:
-        return jsonify({ "status": "failed", "message": "User ID not given" }), 400
-    if 'binId' not in data:
-        return jsonify({ "status": "failed", "message": "Bin ID not given" }), 400
+    uId = request.args.get('uId')
+    binId = request.args.get('binId')
+    sensor_type = request.args.get('sensor_type')
 
-    uId, binId = data['uId'], data['binId']
+    if not uId:
+        return jsonify({ "status": "failed", "message": "User ID not given" }), 400
+    if not binId:
+        return jsonify({ "status": "failed", "message": "Bin ID not given" }), 400
+    if not sensor_type or sensor_type not in sensors.__members__:
+        return jsonify({ "status": "failed", "message": "Invalid or missing sensor type" }), 400
 
     try:
         bin_exists = db.child("Users").child(uId).child(binId).get().val()
         if not bin_exists:
             return jsonify({ "status": "failed", "message": f"Given user ID: {uId} does not own bin {binId}" }), 400
 
-        sensor_data = db.child("Bins").child(binId).get().val()
+        sensor_data = db.child("Bins").child(binId).child(sensor_type).get().val()
+        if not sensor_data:
+            return jsonify({ "status": "failed", "message": f"No data available for {sensor_type}" }), 400
         return jsonify({ "status": "success", "message": "Data fetched successfully", "data": sensor_data }), 200
 
     except Exception as e:
