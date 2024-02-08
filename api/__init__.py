@@ -1,6 +1,5 @@
 from flask import Flask
 import pyrebase
-from firebase_admin import firestore
 
 firebase_client_config = {
     "apiKey": "AIzaSyB5oYH_7CMXhDwPdMudUlhpNWrjmADxX6o",

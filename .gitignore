@@ -1,4 +1,3 @@
-credentials.json
-fbconfig.json
-secretkey.json
-api\__pycache
+*.json
+*__pycache__*
+venv
