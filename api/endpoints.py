@@ -1,8 +1,12 @@
-from flask import render_template, request, jsonify, session
+from flask import request, jsonify, session
 from api import app, auth, db
 from enum import Enum
+from datetime import datetime
 
 sensors = Enum('sensors', ['magnetic', 'air_quality', 'temperature', 'infrared', 'ultrasonic'])
+AQ_THRESHOLD = 800
+MAGNETIC_THRESHOLD = 800
+US_THRESHOLD = 800
 
 
 # main api route; return method and timestamp
@@ -60,7 +64,7 @@ def add_bin():
     if 'binId' not in data:
         return jsonify({ "status": "failed", "message": "Bin ID not given" }), 400
 
-    uId, binId = data["uId"], data["binId"]
+    uId, binId = data.get("uId"), data.get("binId")
 
     try:
         # Check if the binId exists for the given uId
@@ -101,4 +105,35 @@ def fetch_sensors():
 
     except Exception as e:
         print("Error fetching data from Firestore:", str(e))
+        return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
+
+
+@app.route("/bin/write", methods=["PUT"])
+def write_to_db():
+    binId = request.json.get("binId")
+    sensor_type = request.json.get("sensor_type") # might need to change this later
+    sensor_data = request.json.get("sensor_data")
+
+    if not binId:
+        return jsonify({ "status": "failed", "message": "Bin ID not given" }), 400
+    if not sensor_type or sensor_type not in sensors.__members__:
+        return jsonify({ "status": "failed", "message": "Invalid or missing sensor type" }), 400
+    if not sensor_data:
+        return jsonify({ "status": "failed", "message": "No sensor data provided" }), 400
+
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    # TODO: use timestamp accordingly
+
+    try:
+        if sensor_type == "air_quality" and sensor_data > AQ_THRESHOLD:
+                pass # TODO: implement air quality threshold exceeded message
+        elif sensor_type == "magnetic" and sensor_data > MAGNETIC_THRESHOLD:
+                pass # TODO: implement magnetic threshold exceeded message
+        elif sensor_type == "ultrasonic" and sensor_data > US_THRESHOLD:
+            pass # TODO: implement ultrasonic threshold exceeded message
+
+        db.child("Bins").child(binId).child(sensor_type).set(sensor_data)
+        return jsonify({ "status": "success", "message": "Data added to bin" }), 200
+
+    except Exception as e:
         return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400

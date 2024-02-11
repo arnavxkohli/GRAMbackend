@@ -1,4 +1,5 @@
 from flask import Flask
+from flask_cors import CORS
 import pyrebase
 
 firebase_client_config = {
@@ -20,6 +21,8 @@ auth = pb.auth()
 db = pb.database()
 
 app = Flask(__name__)
+
+CORS(app)
 
 app.secret_key = "ea9873ab493d0c43d24d89ee1f96080b91521d3c6ae0e0199a673ffef92e2021" #GRAM sha256 hash
 
