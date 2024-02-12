@@ -137,3 +137,24 @@ def write_to_db():
 
     except Exception as e:
         return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
+    
+@app.route("/bin/fetch/bins", methods=["GET"])
+def fetch_bins():
+    uId = request.args.get('uId')
+    
+    if not uId:
+        return jsonify({ "status": "failed", "message": "User ID not given" }), 400
+
+    try:
+        bins_exist = db.child("Users").child(uId).get().val()
+        
+        if not bins_exist:
+            return jsonify({ "status": "failed", "message": f"Given user ID: {uId} does not own any bins" }), 400
+        
+        data_array = [value for value in bins_exist.values()]
+        
+        return jsonify({ "status": "success", "message": "Data fetched successfully", "data": data_array }), 200
+
+    except Exception as e:
+        print("Error fetching data from Firestore:", str(e))
+        return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
