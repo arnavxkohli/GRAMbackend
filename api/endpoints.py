@@ -1,12 +1,12 @@
 from flask import request, jsonify, session
 from api import app, auth, db
 from enum import Enum
-from datetime import datetime
 
-sensors = Enum('sensors', ['magnetic', 'air_quality', 'temperature', 'infrared', 'ultrasonic'])
-AQ_THRESHOLD = 800
-MAGNETIC_THRESHOLD = 800
-US_THRESHOLD = 800
+sensors = Enum('sensors', ['magnetic', 'air_quality', 'ToF', 'battery_detected', 'fire_detected'])
+
+
+def encode_email(email):
+    return email.replace('.', ',').replace('@', '_')
 
 
 # main api route; return method and timestamp
@@ -18,7 +18,7 @@ def root():
 @app.route("/user/signup", methods=["POST"])
 def signup():
     if ('user' in session):
-        return f"{session['user']} has successfully signed up"
+        return jsonify({ "status": "success", "message": "User already signed up" }), 200
     data = request.json
     email = data.get('email')
     password = data.get('password')
@@ -30,15 +30,16 @@ def signup():
     else:
         if user:
             session['user'] = email
+            db.child("Users").child(encode_email(email)).child("binCount").set(0)
             return jsonify({ "status": "success", "message": "Sign Up successful" }), 200
         else:
             return jsonify({ "status": "failed", "message": "An Error Occurred" }), 400
 
 
-@app.route("/user/signin", methods=["GET"])
+@app.route("/user/signin", methods=["POST"])
 def signin():
     if ('user' in session):
-        return f"{session['user']} has successfully logged in"
+        return jsonify({ "status": "success", "message": "User already signed in" }), 200
     data = request.json
     email = data.get('email')
     password = data.get('password')
@@ -56,33 +57,50 @@ def signin():
             return jsonify({ "status": "failed", "message": "An Error Occurred" }), 400
 
 
-@app.route("/user/addbin", methods=["POST"])
+@app.route("/user/addbin", methods=["PUT"])
 def add_bin():
     data = request.json
     if 'uId' not in data:
         return jsonify({ "status": "failed", "message": "User ID not given" }), 400
-    if 'binId' not in data:
-        return jsonify({ "status": "failed", "message": "Bin ID not given" }), 400
+    if 'binName' not in data:
+        return jsonify({ "status": "failed", "message": "Bin Name not given" }), 400
 
-    uId, binId = data.get("uId"), data.get("binId")
+    uId, binName = encode_email(data.get("uId")), data.get("binName")
 
     try:
-        # Check if the binId exists for the given uId
-        bin_exists = db.child("Users").child(uId).child(binId).get().val()
+        binId = f'id{db.child("Users").child(uId).child("binCount").get().val() + 1}'
+        db.child("Users").child(uId).child("Bins").child(binId).set(binName)
+        db.child("Users").child(uId).child("binCount").set(int(binId[2:]))
+        return jsonify({ "status": "success", "message": "Bin added to User" }), 200
+    except Exception as e:
+        return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
 
-        # If binId does not exist for the uId, add it
-        if not bin_exists:
-            db.child("Users").child(uId).child(binId).set(True)
-            return jsonify({ "status": "success", "message": "Bin added to User" }), 200
+
+@app.route("/user/getbins", methods=["GET"])
+def get_bins():
+    uId = encode_email(request.args.get('uId'))
+    if not uId:
+        return jsonify({ "status": "failed", "message": "User ID not given" }), 400
+
+    try:
+        # Get all bins associated with the given uId
+        user_bins = db.child("Users").child(uId).child("Bins").get().val()
+
+        if user_bins:
+            # Construct a dictionary from the user_bins data
+            bins_dict = {bin_id: bin_name for bin_id, bin_name in user_bins.items()}
+
+            return jsonify({ "status": "success", "data": bins_dict }), 200
         else:
-            return jsonify({ "status": "failed", "message": "Bin already associated with the User" }), 400
+            return jsonify({ "status": "success", "message": "No bins associated with the user" }), 400
+
     except Exception as e:
         return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
 
 
 @app.route("/bin/fetch", methods=["GET"])
 def fetch_sensors():
-    uId = request.args.get('uId')
+    uId = encode_email(request.args.get('uId'))
     binId = request.args.get('binId')
     sensor_type = request.args.get('sensor_type')
 
@@ -94,7 +112,7 @@ def fetch_sensors():
         return jsonify({ "status": "failed", "message": "Invalid or missing sensor type" }), 400
 
     try:
-        bin_exists = db.child("Users").child(uId).child(binId).get().val()
+        bin_exists = db.child("Users").child(uId).child("Bins").child(f"id{request.args.get('binId')}").get().val()
         if not bin_exists:
             return jsonify({ "status": "failed", "message": f"Given user ID: {uId} does not own bin {binId}" }), 400
 
@@ -108,53 +126,10 @@ def fetch_sensors():
         return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
 
 
-@app.route("/bin/write", methods=["PUT"])
-def write_to_db():
-    binId = request.json.get("binId")
-    sensor_type = request.json.get("sensor_type") # might need to change this later
-    sensor_data = request.json.get("sensor_data")
-
-    if not binId:
-        return jsonify({ "status": "failed", "message": "Bin ID not given" }), 400
-    if not sensor_type or sensor_type not in sensors.__members__:
-        return jsonify({ "status": "failed", "message": "Invalid or missing sensor type" }), 400
-    if not sensor_data:
-        return jsonify({ "status": "failed", "message": "No sensor data provided" }), 400
-
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    # TODO: use timestamp accordingly
-
+@app.route('/logout')
+def logout():
     try:
-        if sensor_type == "air_quality" and sensor_data > AQ_THRESHOLD:
-                pass # TODO: implement air quality threshold exceeded message
-        elif sensor_type == "magnetic" and sensor_data > MAGNETIC_THRESHOLD:
-                pass # TODO: implement magnetic threshold exceeded message
-        elif sensor_type == "ultrasonic" and sensor_data > US_THRESHOLD:
-            pass # TODO: implement ultrasonic threshold exceeded message
-
-        db.child("Bins").child(binId).child(sensor_type).set(sensor_data)
-        return jsonify({ "status": "success", "message": "Data added to bin" }), 200
-
+        session.clear()
+        return jsonify({ "status": "success", "message": "Sign Out successful" }), 200
     except Exception as e:
-        return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
-    
-@app.route("/bin/fetch/bins", methods=["GET"])
-def fetch_bins():
-    uId = request.args.get('uId')
-    
-    if not uId:
-        return jsonify({ "status": "failed", "message": "User ID not given" }), 400
-
-    try:
-        bins_exist = db.child("Users").child(uId).get().val()
-        
-        if not bins_exist:
-            return jsonify({ "status": "failed", "message": f"Given user ID: {uId} does not own any bins" }), 400
-        
-        data_array = [value for value in bins_exist.values()]
-        
-        return jsonify({ "status": "success", "message": "Data fetched successfully", "data": data_array }), 200
-
-    except Exception as e:
-        print("Error fetching data from Firestore:", str(e))
         return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
