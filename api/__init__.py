@@ -27,7 +27,7 @@ CORS(app)
 app.secret_key = "ea9873ab493d0c43d24d89ee1f96080b91521d3c6ae0e0199a673ffef92e2021" #GRAM sha256 hash
 
 
-from api import endpoints
+from api import endpoints, ip
 
 
 
