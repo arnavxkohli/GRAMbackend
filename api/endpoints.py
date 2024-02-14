@@ -75,6 +75,7 @@ def add_bin():
     try:
         binId = f'id{db.child("binCount").get().val() + 1}'
         db.child("Users").child(uId).child("Bins").child(binId).set(binName)
+        db.child("Bins").child(binId).child("placeholder")
         db.child("binCount").set(int(binId[2:]))
         return jsonify({ "status": "success", "message": "Bin added to User" }), 200
     except Exception as e:
@@ -118,6 +119,9 @@ def fetch_sensors():
         bin_exists = db.child("Users").child(uId).child("Bins").child(f"id{request.args.get('binId')}").get().val()
         if not bin_exists:
             return jsonify({ "status": "failed", "message": f"Given user ID: {uId} does not own bin {binId}" }), 400
+
+        if db.child("Bins").child(binId).get().val() == "placeholder":
+            return jsonify({"status": "success", "message": "No data found, render defaults", "data": None}), 200
 
         sensor_data = db.child("Bins").child(binId).child(sensor_type).get().val()
         if not sensor_data:
