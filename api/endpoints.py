@@ -29,6 +29,7 @@ def signup():
             return jsonify({ "status": "error", "message": "Passwords do not match" }), 400
     try:
         user = auth.create_user_with_email_and_password(email, password)
+        db.child("Users").child(encode_email(email)).child("Bins").set("place_holder")
 
     except Exception as e:
         return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
