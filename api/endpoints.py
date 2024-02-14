@@ -22,6 +22,9 @@ def signup():
     data = request.json
     email = data.get('email')
     password = data.get('password')
+    rpassword = data.get('rpassword')
+    if not rpassword or rpassword != password:
+            return jsonify({ "status": "error", "message": "Passwords do not match" }), 400
     try:
         user = auth.create_user_with_email_and_password(email, password)
 
