@@ -1,5 +1,5 @@
 from flask import request, jsonify, session
-from api import app, auth, db
+from api import app, auth, db, ip
 from enum import Enum
 
 sensors = Enum('sensors', ['magnetic', 'air_quality', 'ToF', 'battery_detected', 'fire_detected'])
@@ -7,6 +7,11 @@ sensors = Enum('sensors', ['magnetic', 'air_quality', 'ToF', 'battery_detected',
 
 def encode_email(email):
     return email.replace('.', ',').replace('@', '_')
+
+
+@app.before_first_request
+def initialize():
+    ip.push_public_ip()
 
 
 # main api route; return method and timestamp
