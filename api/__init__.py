@@ -20,11 +20,15 @@ auth = pb.auth()
 
 db = pb.database()
 
-app = Flask(__name__)
+def create_app():
+    app = Flask(__name__)
+    CORS(app)
+    app.secret_key = "ea9873ab493d0c43d24d89ee1f96080b91521d3c6ae0e0199a673ffef92e2021" #GRAM sha256 hash
 
-CORS(app)
+    with app.app_context():
+        ip.push_public_ip()
 
-app.secret_key = "ea9873ab493d0c43d24d89ee1f96080b91521d3c6ae0e0199a673ffef92e2021" #GRAM sha256 hash
+    return app
 
 
 from api import endpoints, ip
