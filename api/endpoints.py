@@ -1,8 +1,10 @@
 from flask import request, jsonify, session
 from api import app, auth, db
 from enum import Enum
+from datetime import datetime
 
-sensors = Enum('sensors', ['magnetic', 'air_quality', 'ToF', 'battery_detected', 'fire_detected'])
+sensors = Enum('sensors', ['magnetic', 'air_quality', 'ToF'])
+messages = Enum('messages', ['battery_detected', 'fire_detected'])
 
 
 def encode_email(email):
@@ -33,7 +35,6 @@ def signup():
     else:
         if user:
             session['user'] = email
-            db.child("Users").child(encode_email(email)).child("binCount").set(0)
             return jsonify({ "status": "success", "message": "Sign Up successful" }), 200
         else:
             return jsonify({ "status": "failed", "message": "An Error Occurred" }), 400
@@ -71,9 +72,9 @@ def add_bin():
     uId, binName = encode_email(data.get("uId")), data.get("binName")
 
     try:
-        binId = f'id{db.child("Users").child(uId).child("binCount").get().val() + 1}'
+        binId = f'id{db.child("binCount").get().val() + 1}'
         db.child("Users").child(uId).child("Bins").child(binId).set(binName)
-        db.child("Users").child(uId).child("binCount").set(int(binId[2:]))
+        db.child("binCount").set(int(binId[2:]))
         return jsonify({ "status": "success", "message": "Bin added to User" }), 200
     except Exception as e:
         return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
@@ -90,10 +91,8 @@ def get_bins():
         user_bins = db.child("Users").child(uId).child("Bins").get().val()
 
         if user_bins:
-            # Construct a dictionary from the user_bins data
-            bins_dict = {bin_id: bin_name for bin_id, bin_name in user_bins.items()}
 
-            return jsonify({ "status": "success", "data": bins_dict }), 200
+            return jsonify({ "status": "success", "data": user_bins }), 200
         else:
             return jsonify({ "status": "success", "message": "No bins associated with the user" }), 400
 
@@ -123,6 +122,33 @@ def fetch_sensors():
         if not sensor_data:
             return jsonify({ "status": "failed", "message": f"No data available for {sensor_type}" }), 400
         return jsonify({ "status": "success", "message": "Data fetched successfully", "data": sensor_data }), 200
+
+    except Exception as e:
+        print("Error fetching data from Firestore:", str(e))
+        return jsonify({ "status": "error", "type": type(e).__name__, "message": str(e)}), 400
+
+
+@app.route("/bin/messages", methods=["GET"])
+def fetch_messages():
+    uId = encode_email(request.args.get('uId'))
+    binId = request.args.get('binId')
+    message_type = request.args.get('message_type')
+
+    if not uId:
+        return jsonify({ "status": "failed", "message": "User ID not given" }), 400
+    if not binId:
+        return jsonify({ "status": "failed", "message": "Bin ID not given" }), 400
+    if not message_type or message_type not in messages.__members__:
+        return jsonify({ "status": "failed", "message": "Invalid or missing message type" }), 400
+
+    try:
+        bin_exists = db.child("Users").child(uId).child("Bins").child(f"id{request.args.get('binId')}").get().val()
+        if not bin_exists:
+            return jsonify({ "status": "failed", "message": f"Given user ID: {uId} does not own bin {binId}" }), 400
+
+        message_data = db.child("Bins").child(binId).child(message_type).get().val()
+        jsondata = {"message": message_data, "time": datetime.now().strftime("%H:%M:%S")}
+        return jsonify({ "status": "success", "message": "Data fetched successfully", "data": jsondata }), 200
 
     except Exception as e:
         print("Error fetching data from Firestore:", str(e))
