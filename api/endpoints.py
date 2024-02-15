@@ -124,7 +124,7 @@ def fetch_sensors():
             return jsonify({"status": "success", "message": "No data found, render defaults", "data": None}), 200
 
         sensor_data = db.child("Bins").child(binId).child(sensor_type).get().val()
-        if not sensor_data:
+        if sensor_data is None:
             return jsonify({ "status": "failed", "message": f"No data available for {sensor_type}" }), 400
         return jsonify({ "status": "success", "message": "Data fetched successfully", "data": sensor_data }), 200
 
